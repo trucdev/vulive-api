@@ -24,9 +24,14 @@ export class UsersService {
   }
 
   findOne(id: string) {
-    console.log(this.configService.get('MONGODB_CONNECTION_STRING'));
     return this.userModel.findOne({
       _id: Types.ObjectId.createFromHexString(id),
+    });
+  }
+
+  findUserByEmail(email: string) {
+    return this.userModel.findOne({
+      email,
     });
   }
 
