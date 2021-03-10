@@ -17,6 +17,12 @@
       ],
       "@lib/auth/*": [
         "libs/auth/src/*"
+      ],
+      "@config/config": [
+        "libs/config/src"
+      ],
+      "@config/config/*": [
+        "libs/config/src/*"
       ]
     }
   }
