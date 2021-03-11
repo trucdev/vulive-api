@@ -33,6 +33,10 @@ import { I18nModule, I18nJsonParser, HeaderResolver } from 'nestjs-i18n';
       context: ({ req, connection }) => {
         return connection ? { req: connection.context } : { req };
       },
+      formatError: (e) => {
+        // console.log(e);
+        return e;
+      },
       debug: true,
       tracing: true,
       playground: true,

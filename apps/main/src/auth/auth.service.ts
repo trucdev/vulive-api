@@ -9,6 +9,7 @@ import {
   RefreshToken,
   RefreshTokenDocument,
 } from './schemas/refresh.token.schema';
+import { AuthErrors } from './types/enum';
 import { AccessTokenJwtData } from './types/jwt';
 
 // import does not work
@@ -21,6 +22,16 @@ export class AuthService {
    */
   private refreshTokenTTL: number;
   private accessTokenTTL: number;
+
+  // todo: move this to redis
+  private blockedUserToken: {
+    [userId: string]: {
+      /**
+       * Date to expires
+       */
+      [token: string]: Date;
+    };
+  };
 
   constructor(
     @InjectModel(RefreshToken.name)
@@ -36,6 +47,9 @@ export class AuthService {
 
     const strAccessTokenTTL = configService.get<string>('AUTH_JWT_EXPIRES_IN');
     this.accessTokenTTL = ms(strAccessTokenTTL) / 1000;
+
+    // todo: move this to redis
+    this.blockedUserToken = {};
   }
 
   validatePassword(password: string, comparePassword: string) {
@@ -47,6 +61,20 @@ export class AuthService {
     if (user && this.validatePassword(user.password, password)) {
       return user;
     }
+  }
+  /**
+   * If refresh token is expired
+   * in change password case
+   * in refresh token case
+   * we need to define access from old token
+   * @param accessTokenJwtData
+   * @returns
+   */
+  async validateAccessTokenData(accessTokenJwtData: AccessTokenJwtData) {
+    return !(
+      this.blockedUserToken[accessTokenJwtData.uid] &&
+      this.blockedUserToken[accessTokenJwtData.uid][accessTokenJwtData.tokenId]
+    );
   }
 
   /**
@@ -94,24 +122,31 @@ export class AuthService {
       },
     );
 
+    if (oldData.tokenId !== refreshToken) {
+      throw new Error(AuthErrors.TOKENS_PROVIDED_NOT_MATCH);
+    }
+
     // check refreshToken in database
     const token = await this.refreshTokenModel.findOne({
       _id: Types.ObjectId(refreshToken),
     });
 
     if (!token) {
-      throw new Error('Refresh token not found');
+      throw new Error(AuthErrors.REFRESH_TOKEN_NOTFOUND);
     }
 
     const currentDate = new Date();
     if (token.expiresAt < currentDate) {
-      throw new Error('Refresh token expired');
+      throw new Error(AuthErrors.REFRESH_TOKEN_EXPIRED);
     }
 
     // delete this token
     await this.refreshTokenModel.deleteOne({
       _id: Types.ObjectId(refreshToken),
     });
+
+    // to expire access tokens that pair with the refresh token
+    this.blockUserToken(refreshToken, oldData.uid);
 
     // make new tokens
     const newRefreshToken = await this.createRefreshToken(
@@ -139,5 +174,14 @@ export class AuthService {
       expiresAt: moment().add(this.refreshTokenTTL, 's').toDate(),
     });
     return newRefreshToken;
+  }
+
+  async blockUserToken(tokenId: string, userId: string) {
+    this.blockedUserToken = {
+      ...this.blockedUserToken,
+      [userId]: {
+        [tokenId]: moment().add(this.accessTokenTTL, 's').toDate(),
+      },
+    };
   }
 }
