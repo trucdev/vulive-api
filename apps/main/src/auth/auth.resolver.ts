@@ -24,6 +24,8 @@ export class AuthResolver {
       throw new UserInputError(message);
     }
 
-    return this.authService.makeJwt(user);
+    const f5Token = await this.authService.createRefreshToken(user.id, '', '');
+
+    return this.authService.makeAccessToken({ uid: user.id }, f5Token);
   }
 }
